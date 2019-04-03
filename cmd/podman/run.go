@@ -54,14 +54,16 @@ func runCmd(c *cliconfig.RunValues) error {
 		defer span.Finish()
 	}
 
-	if err := createInit(&c.PodmanCommand); err != nil {
+	if err := createInit(&c.PodmanCommand); err != nil { // checks input length
 		return err
 	}
-	if os.Geteuid() != 0 {
+	// if the user not root skip storage setup
+	if os.Geteuid() != 0 { // effective id of the user
 		rootless.SetSkipStorageSetup(true)
 	}
 
 	runtime, err := libpodruntime.GetRuntime(&c.PodmanCommand)
+	fmt.Println("HERE", runtime, error)
 	if err != nil {
 		return errors.Wrapf(err, "error creating libpod runtime")
 	}
