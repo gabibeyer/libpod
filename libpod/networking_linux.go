@@ -51,22 +51,30 @@ func (r *Runtime) getPodNetwork(id, name, nsPath string, networks []string, port
 
 // Create and configure a new network namespace for a container
 func (r *Runtime) configureNetNS(ctr *Container, ctrNS ns.NetNS) ([]*cnitypes.Result, error) {
+	logrus.Warn("one")
 	var requestedIP net.IP
 	if ctr.requestedIP != nil {
+		logrus.Warn("two")
 		requestedIP = ctr.requestedIP
 		// cancel request for a specific IP in case the container is reused later
 		ctr.requestedIP = nil
 	} else {
+	logrus.Warn("three")
 		requestedIP = ctr.config.StaticIP
 	}
 
+	logrus.Warn("four")
 	podNetwork := r.getPodNetwork(ctr.ID(), ctr.Name(), ctrNS.Path(), ctr.config.Networks, ctr.config.PortMappings, requestedIP)
 
+	logrus.Warn("five")
 	results, err := r.netPlugin.SetUpPod(podNetwork)
+	logrus.Warn("six")
 	if err != nil {
 		return nil, errors.Wrapf(err, "error configuring network namespace for container %s", ctr.ID())
+	logrus.Warn("seven")
 	}
 	defer func() {
+	logrus.Warn("eight")
 		if err != nil {
 			if err2 := r.netPlugin.TearDownPod(podNetwork); err2 != nil {
 				logrus.Errorf("Error tearing down partially created network namespace for container %s: %v", ctr.ID(), err2)
@@ -75,6 +83,7 @@ func (r *Runtime) configureNetNS(ctr *Container, ctrNS ns.NetNS) ([]*cnitypes.Re
 	}()
 
 	networkStatus := make([]*cnitypes.Result, 0)
+	logrus.Warn("nine")
 	for idx, r := range results {
 		logrus.Debugf("[%d] CNI result: %v", idx, r.String())
 		resultCurrent, err := cnitypes.GetResult(r)
@@ -84,6 +93,7 @@ func (r *Runtime) configureNetNS(ctr *Container, ctrNS ns.NetNS) ([]*cnitypes.Re
 		networkStatus = append(networkStatus, resultCurrent)
 	}
 
+	logrus.Warn("ten")
 	// Add firewall rules to ensure the container has network access.
 	// Will not be necessary once CNI firewall plugin merges upstream.
 	// https://github.com/containernetworking/plugins/pull/75
@@ -105,6 +115,7 @@ func (r *Runtime) createNetNS(ctr *Container) (n ns.NetNS, q []*cnitypes.Result,
 		return nil, nil, errors.New("cannot configure a new network namespace in rootless mode, only --network=slirp4netns is supported")
 	}
 	ctrNS, err := netns.NewNS()
+	logrus.Infof("created new netns: %+v, %v", ctrNS, err)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "error creating network namespace for container %s", ctr.ID())
 	}
@@ -122,6 +133,7 @@ func (r *Runtime) createNetNS(ctr *Container) (n ns.NetNS, q []*cnitypes.Result,
 	logrus.Debugf("Made network namespace at %s for container %s", ctrNS.Path(), ctr.ID())
 
 	networkStatus, err := r.configureNetNS(ctr, ctrNS)
+	//return ctrNS, nil, err
 	return ctrNS, networkStatus, err
 }
 
@@ -172,10 +184,68 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 
 	havePortMapping := len(ctr.Config().PortMappings) > 0
 	apiSocket := filepath.Join(r.ociRuntime.tmpDir, fmt.Sprintf("%s.net", ctr.config.ID))
+	logrus.Warnf("apiSocket Path: %s", apiSocket)
 
+	prog_pid := os.Getpid()
+	logrus.Warnf("Current PID: %d", prog_pid)
+
+
+	// FIXME
+	pause_bin := "/home/gnbeyer/go/src/github.com/cri-o/cri-o/bin/pause"
+
+	//nscmd := exec.Command(pause_bin)
+	//nscmd.SysProcAttr := &syscall.SysProcAttr{
+	procAttr := &os.ProcAttr{
+		Sys: &syscall.SysProcAttr{
+		Cloneflags: syscall.CLONE_NEWNS |
+			syscall.CLONE_NEWNET |
+			syscall.CLONE_NEWUSER,
+
+		UidMappings: []syscall.SysProcIDMap{
+		    {
+		        ContainerID: 0,
+		        HostID:      os.Getuid(),
+		        Size:        1,
+		    },
+		},
+		GidMappings: []syscall.SysProcIDMap{
+		    {
+		        ContainerID: 0,
+		        HostID:      os.Getgid(),
+		        Size:        1,
+		    },
+		},
+		},
+	}
+	process, err := os.StartProcess(pause_bin, []string{}, procAttr)
+	logrus.Infof("info from os.StartProcess: %+v %+v %d", err, process, process.Pid)
+
+	//defer process.Signal(os.Interrupt)
+
+	//ctr.state.NetNS, err = ns.NewNS()
+	//if err != nil {
+	//	logrus.Errorf("Error creating new network namespace %+v", err)
+	//	return err
+	//}
+
+	logrus.Warnf("THE GOODS: %+v", ctr.config.Spec.Linux.Namespaces)
+	for i, j := range ctr.config.Spec.Linux.Namespaces {
+		if (j.Type == "network") {
+			//ctr.config.Spec.Linux.Namespaces[i].Path = ctr.state.NetNS.Path()
+			ctr.config.Spec.Linux.Namespaces[i].Path = fmt.Sprintf("/proc/%d/ns/net", process.Pid)
+		}
+	}
+
+	logrus.Warnf("THE GOODS AFTER: %+v", ctr.config.Spec.Linux.Namespaces)
+	if err := ctr.saveSpec(ctr.config.Spec); err != nil {
+		logrus.Errorf("Failure saving spec to disk: %+v", err)
+	}
+
+	//cmdArgs := []string{"-f", "-o", "/tmp/output/podman", "slirp4netns"}
 	cmdArgs := []string{}
 	if havePortMapping {
-		cmdArgs = append(cmdArgs, "--api-socket", apiSocket, fmt.Sprintf("%d", ctr.state.PID))
+		//cmdArgs = append(cmdArgs, "--api-socket", apiSocket, fmt.Sprintf("%d", ctr.state.PID))
+		cmdArgs = append(cmdArgs, "--api-socket", apiSocket, fmt.Sprintf("%d", process.Pid))
 	}
 	dhp, mtu, err := checkSlirpFlags(path)
 	if err != nil {
@@ -187,18 +257,39 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 	if mtu {
 		cmdArgs = append(cmdArgs, "--mtu", "65520")
 	}
-	cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("%d", ctr.state.PID), "tap0")
+	logrus.Warn("before the troubling")
+//	pid := strconv.Itoa(os.Getpid())
+	//cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("%d", ctr.state.PID), "tap0")
 
+	//curUser, err := user.Current()
+	//if err != nil {
+	//	fmt.Println("error getting current user: %s", err)
+	//}
+	//cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("--userns-path=/proc/23984/ns/user", pid), "--netns-type=path", ctr.state.NetNS.Path(), "tap0")
+	cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("%d", process.Pid), "tap0")
+
+	//cmd := exec.Command("strace", cmdArgs...)
 	cmd := exec.Command(path, cmdArgs...)
+	cmd.Env = os.Environ()
+	logrus.Warnf("Slirp command: %s", cmd)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}
+
+        ctr.rootlessSlirpSyncR, ctr.rootlessSlirpSyncW, err = os.Pipe()
+        if err != nil {
+                return errors.Wrapf(err, "failed to create rootless network sync pipe")
+        }
+
 	cmd.ExtraFiles = append(cmd.ExtraFiles, ctr.rootlessSlirpSyncR, syncW)
+	logrus.Warnf("ctr.rootlessSlirpSyncR: %d, syncW: %d", ctr.rootlessSlirpSyncR.Fd(), syncW.Fd())
+	logrus.Warnf("EXTRAFILES: %+v", cmd.ExtraFiles)
 
 	if err := cmd.Start(); err != nil {
 		return errors.Wrapf(err, "failed to start slirp4netns process")
 	}
+	logrus.Warnf("slirp4netns process cmd pid: %d", cmd.Process.Pid)
 	defer cmd.Process.Release()
 
 	b := make([]byte, 16)
@@ -230,6 +321,7 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 			return errors.Wrapf(err, "failed to read from slirp4netns sync pipe")
 		}
 	}
+
 
 	if havePortMapping {
 		const pidWaitTimeout = 60 * time.Second
@@ -308,6 +400,16 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 			}
 		}
 	}
+	logrus.Errorf("PID: %d", os.Getpid())
+	nscmd := exec.Command("ls", "-lht", fmt.Sprintf("/proc/%d/ns/net", process.Pid))
+        output, err := nscmd.CombinedOutput()
+        logrus.Warnf("network namespace: %+v Err: %+v", string(output), err)
+
+	//nsArgs := []string{"nsenter", fmt.Sprintf("--net=/proc/%d/ns/net", process.Pid), "ip", "a"}
+	//nsCmd := exec.Command("nsenter", nsArgs...)
+	//logrus.Warnf("nsenter cmd network namespace: %s", nsCmd)
+	//output, err2 := nsCmd.CombinedOutput()
+	//logrus.Warnf("Nsenter output: %+v || %+v", string(output), err2)
 	return nil
 }
 
@@ -321,7 +423,7 @@ func (r *Runtime) setupNetNS(ctr *Container) (err error) {
 		return errors.Wrapf(err, "failed to generate random netns name")
 	}
 
-	nsPath := fmt.Sprintf("/var/run/netns/cni-%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+	nsPath := fmt.Sprintf("/tmp/katapod/netns/cni-%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 
 	if err := os.MkdirAll(filepath.Dir(nsPath), 0711); err != nil {
 		return errors.Wrapf(err, "cannot create %s", filepath.Dir(nsPath))
@@ -333,6 +435,7 @@ func (r *Runtime) setupNetNS(ctr *Container) (err error) {
 	}
 	mountPointFd.Close()
 
+	logrus.Warnf("Mounting nsprocess: %s and nsPath: %s", nsProcess, nsPath)
 	if err := unix.Mount(nsProcess, nsPath, "none", unix.MS_BIND, ""); err != nil {
 		return errors.Wrapf(err, "cannot mount %s", nsPath)
 	}
@@ -346,12 +449,14 @@ func (r *Runtime) setupNetNS(ctr *Container) (err error) {
 	// Assign NetNS attributes to container
 	ctr.state.NetNS = netNS
 	ctr.state.NetworkStatus = networkStatus
+	logrus.Warnf("root netns created: %+v", ctr.state.NetNS)
 	return err
 }
 
 // Join an existing network namespace
 func joinNetNS(path string) (ns.NetNS, error) {
 	ns, err := ns.GetNS(path)
+	logrus.Errorf("return from join: %+v %+v", ns, err)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error retrieving network namespace at %s", path)
 	}
@@ -432,6 +537,7 @@ func (r *Runtime) teardownNetNS(ctr *Container) error {
 }
 
 func getContainerNetNS(ctr *Container) (string, error) {
+	logrus.Debugf("Container info collected from podman %+v || %+v || %+v || %s", ctr, ctr.config.NetNsCtr, ctr.state, ctr.state.NetNS.Path())
 	if ctr.state.NetNS != nil {
 		return ctr.state.NetNS.Path(), nil
 	}
@@ -471,6 +577,7 @@ func getContainerNetIO(ctr *Container) (*netlink.LinkStatistics, error) {
 }
 
 func (c *Container) getContainerNetworkInfo(data *inspect.ContainerInspectData) *inspect.ContainerInspectData {
+	logrus.Debugf("getContainerNetworkInfo c.state.NetNS and c.state.NetworkStatue %+x %+x", c.state.NetNS, c.state.NetworkStatus)
 	if c.state.NetNS != nil && len(c.state.NetworkStatus) > 0 {
 		// Report network settings from the first pod network
 		result := c.state.NetworkStatus[0]

@@ -34,6 +34,7 @@ func getAvailableGids() (int64, error) {
 
 // CreateConfigToOCISpec parses information needed to create a container into an OCI runtime spec
 func (config *CreateConfig) createConfigToOCISpec(runtime *libpod.Runtime, userMounts []spec.Mount) (*spec.Spec, error) {
+	logrus.Info("CreateConfigToOCISpec in pkg/spec/spec.go")
 	cgroupPerm := "ro"
 	g, err := generate.New("linux")
 	if err != nil {

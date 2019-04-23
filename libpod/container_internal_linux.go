@@ -179,6 +179,7 @@ func (c *Container) generateSpec(ctx context.Context) (*spec.Spec, error) {
 	g := generate.NewFromSpec(c.config.Spec)
 
 	// If network namespace was requested, add it now
+	logrus.Errorf("c.config.PostConfigureNetNS: %s", c.config.PostConfigureNetNS)
 	if c.config.CreateNetNS {
 		if c.config.PostConfigureNetNS {
 			g.AddOrReplaceLinuxNamespace(spec.NetworkNamespace, "")
@@ -652,6 +653,7 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 	// Cleanup for a working restore.
 	c.removeConmonFiles()
 
+	logrus.Warn("This is the trouble maker. Do things before this!")
 	if err := c.runtime.ociRuntime.createContainer(c, c.config.CgroupParent, &options); err != nil {
 		return err
 	}

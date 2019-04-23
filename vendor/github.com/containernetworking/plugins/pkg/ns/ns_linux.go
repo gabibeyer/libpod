@@ -41,7 +41,7 @@ func getCurrentThreadNetNSPath() string {
 // Creates a new persistent network namespace and returns an object
 // representing that namespace, without switching to it
 func NewNS() (NetNS, error) {
-	const nsRunDir = "/var/run/netns"
+	const nsRunDir = "/tmp/katapod/var/run/netns"
 
 	b := make([]byte, 16)
 	_, err := rand.Reader.Read(b)
@@ -67,6 +67,11 @@ func NewNS() (NetNS, error) {
 	// was successfully mounted this will have no effect because the file
 	// is in-use
 	defer os.RemoveAll(nsPath)
+
+	//err = unix.Unshare(unix.CLONE_NEWUSER)
+	//if err != nil {
+	//	fmt.Println("Error creating unsharing user namespace: ", err)
+	//}
 
 	var wg sync.WaitGroup
 	wg.Add(1)

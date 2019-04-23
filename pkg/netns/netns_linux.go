@@ -31,7 +31,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const nsRunDir = "/var/run/netns"
+const nsRunDir = "/tmp/katapod/netns"
 
 // NewNS creates a new persistent (bind-mounted) network namespace and returns
 // an object representing that namespace, without switching to it.

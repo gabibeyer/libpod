@@ -97,6 +97,7 @@ func makeAccessible(path string, uid, gid int) error {
 // TODO terminal support for container
 // Presently just ignoring conmon opts related to it
 func (r *OCIRuntime) createContainer(ctr *Container, cgroupParent string, restoreOptions *ContainerCheckpointOptions) (err error) {
+	logrus.Info("In oci_linux.go createContainer func Creating OCI container")
 	if len(ctr.config.IDMappings.UIDMap) != 0 || len(ctr.config.IDMappings.GIDMap) != 0 {
 		for _, i := range []string{ctr.state.RunDir, ctr.runtime.config.TmpDir, ctr.config.StaticDir, ctr.state.Mountpoint, ctr.runtime.config.VolumePath} {
 			if err := makeAccessible(i, ctr.RootUID(), ctr.RootGID()); err != nil {

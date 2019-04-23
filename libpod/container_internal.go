@@ -480,6 +480,7 @@ func resetState(state *ContainerState) error {
 // We cannot guarantee any other container has a valid lock at the time it is
 // running.
 func (c *Container) refresh() error {
+	logrus.Error("ENTERS REFRESH FUNC")
 	// Don't need a full sync, but we do need to update from the database to
 	// pick up potentially-missing container state
 	if err := c.runtime.state.UpdateContainer(c); err != nil {
@@ -490,15 +491,19 @@ func (c *Container) refresh() error {
 		return errors.Wrapf(ErrCtrRemoved, "container %s is not valid - may have been removed", c.ID())
 	}
 
+	logrus.Errorf("ENTERS REFRESH FUNC: %+v", c.ID())
 	// We need to get the container's temporary directory from c/storage
 	// It was lost in the reboot and must be recreated
 	dir, err := c.runtime.storageService.GetRunDir(c.ID())
+	logrus.Warnf("Dir and err from refresh: %+v || %+v", dir, err)
 	if err != nil {
 		return errors.Wrapf(err, "error retrieving temporary directory for container %s", c.ID())
 	}
 	c.state.RunDir = dir
 
+	logrus.Error("ENTERS REFRESH FUNC")
 	if len(c.config.IDMappings.UIDMap) != 0 || len(c.config.IDMappings.GIDMap) != 0 {
+		logrus.Warnf("PODMAN IS ATTEMPTING TO CREATE USERNS: %+v", c.config.IDMappings.UIDMap)
 		info, err := os.Stat(c.runtime.config.TmpDir)
 		if err != nil {
 			return errors.Wrapf(err, "cannot stat `%s`", c.runtime.config.TmpDir)
@@ -515,6 +520,7 @@ func (c *Container) refresh() error {
 		}
 	}
 
+	logrus.Error("ENTERS REFRESH FUNC")
 	// We need to pick up a new lock
 	lock, err := c.runtime.lockManager.AllocateAndRetrieveLock(c.config.LockID)
 	if err != nil {
@@ -526,6 +532,7 @@ func (c *Container) refresh() error {
 		return errors.Wrapf(err, "error refreshing state for container %s", c.ID())
 	}
 
+	logrus.Error("ENTERS REFRESH FUNC")
 	// Remove ctl and attach files, which may persist across reboot
 	if err := c.removeConmonFiles(); err != nil {
 		return err
@@ -846,6 +853,7 @@ func (c *Container) completeNetworkSetup() error {
 		return err
 	}
 	if !c.config.PostConfigureNetNS || netDisabled {
+		logrus.Info("root path for completeNetworkSetup: return nil")
 		return nil
 	}
 	if err := c.syncContainer(); err != nil {
@@ -865,6 +873,7 @@ func (c *Container) init(ctx context.Context, retainRetries bool) error {
 
 	// Generate the OCI spec
 	spec, err := c.generateSpec(ctx)
+	logrus.Warnf("Podman generated OCI spec: %+v", spec)
 	if err != nil {
 		return err
 	}
@@ -874,6 +883,12 @@ func (c *Container) init(ctx context.Context, retainRetries bool) error {
 		return err
 	}
 
+	if err := c.completeNetworkSetup(); err != nil {
+		logrus.Errorf("Error completing Network Setup: %+v\n", err)
+		return err
+	}
+
+	logrus.Warn("THIS IS THE CREATE CONTAINER IN internal.go")
 	// With the spec complete, do an OCI create
 	if err := c.runtime.ociRuntime.createContainer(c, c.config.CgroupParent, nil); err != nil {
 		return err
@@ -901,7 +916,7 @@ func (c *Container) init(ctx context.Context, retainRetries bool) error {
 	}
 
 	defer c.newContainerEvent(events.Init)
-	return c.completeNetworkSetup()
+	return nil
 }
 
 // Clean up a container in the OCI runtime.

@@ -53,6 +53,7 @@ func createCmd(c *cliconfig.CreateValues) error {
 	}
 
 	runtime, err := adapter.GetRuntime(getContext(), &c.PodmanCommand)
+	fmt.Printf("runtime from adapter.GetRuntime %+v %+v", runtime, err)
 	if err != nil {
 		return errors.Wrapf(err, "error creating libpod runtime")
 	}
