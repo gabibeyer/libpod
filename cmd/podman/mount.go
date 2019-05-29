@@ -78,10 +78,12 @@ func mountCmd(c *cliconfig.MountValues) error {
 			return fmt.Errorf("cannot mount using driver %s in rootless mode", driver)
 		}
 
+		logrus.Warnf("Before BecomeRootInUserNS from Mount")
 		became, ret, err := rootless.BecomeRootInUserNS()
 		if err != nil {
 			return err
 		}
+		logrus.Warnf("After BecameRootInUserNS became: %v ret: %+v err: %v", became, ret, err)
 		if became {
 			os.Exit(ret)
 		}

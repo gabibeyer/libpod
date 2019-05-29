@@ -191,48 +191,49 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 
 
 	// FIXME
-	pause_bin := "/home/gnbeyer/go/src/github.com/cri-o/cri-o/bin/pause"
+	//pause_bin := "/home/gnbeyer/go/src/github.com/cri-o/cri-o/bin/pause"
 
 	//nscmd := exec.Command(pause_bin)
 	//nscmd.SysProcAttr := &syscall.SysProcAttr{
-	procAttr := &os.ProcAttr{
-		Sys: &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWNS |
-			syscall.CLONE_NEWNET |
-			syscall.CLONE_NEWUSER,
+	//procAttr := &os.ProcAttr{
+	//	Sys: &syscall.SysProcAttr{
+	//	Cloneflags: syscall.CLONE_NEWNS |
+	//		syscall.CLONE_NEWUSER |
+	//		syscall.CLONE_NEWNET,
 
-		UidMappings: []syscall.SysProcIDMap{
-		    {
-		        ContainerID: 0,
-		        HostID:      os.Getuid(),
-		        Size:        1,
-		    },
-		},
-		GidMappings: []syscall.SysProcIDMap{
-		    {
-		        ContainerID: 0,
-		        HostID:      os.Getgid(),
-		        Size:        1,
-		    },
-		},
-		},
-	}
-	process, err := os.StartProcess(pause_bin, []string{}, procAttr)
-	logrus.Infof("info from os.StartProcess: %+v %+v %d", err, process, process.Pid)
+	//	UidMappings: []syscall.SysProcIDMap{
+	//	    {
+	//	        ContainerID: 0,
+	//	        HostID:      os.Getuid(),
+	//	        Size:        1,
+	//	    },
+	//	},
+	//	GidMappings: []syscall.SysProcIDMap{
+	//	    {
+	//	        ContainerID: 0,
+	//	        HostID:      os.Getgid(),
+	//	        Size:        1,
+	//	    },
+	//	},
+	//	},
+	//}
+	//process, err := os.StartProcess(pause_bin, []string{}, procAttr)
+	//logrus.Infof("info from os.StartProcess: %+v %+v %d", err, process, process.Pid)
 
 	//defer process.Signal(os.Interrupt)
 
-	//ctr.state.NetNS, err = ns.NewNS()
-	//if err != nil {
-	//	logrus.Errorf("Error creating new network namespace %+v", err)
-	//	return err
-	//}
+	ctr.state.NetNS, err = ns.NewNS()
+	logrus.Warnf("Network Namespace Path: %s", ctr.state.NetNS.Path())
+	if err != nil {
+		logrus.Errorf("Error creating new network namespace %+v", err)
+		return err
+	}
 
 	logrus.Warnf("THE GOODS: %+v", ctr.config.Spec.Linux.Namespaces)
 	for i, j := range ctr.config.Spec.Linux.Namespaces {
 		if (j.Type == "network") {
-			//ctr.config.Spec.Linux.Namespaces[i].Path = ctr.state.NetNS.Path()
-			ctr.config.Spec.Linux.Namespaces[i].Path = fmt.Sprintf("/proc/%d/ns/net", process.Pid)
+			ctr.config.Spec.Linux.Namespaces[i].Path = ctr.state.NetNS.Path()
+			//ctr.config.Spec.Linux.Namespaces[i].Path = fmt.Sprintf("/proc/%d/ns/net", process.Pid)
 		}
 	}
 
@@ -244,8 +245,8 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 	//cmdArgs := []string{"-f", "-o", "/tmp/output/podman", "slirp4netns"}
 	cmdArgs := []string{}
 	if havePortMapping {
-		//cmdArgs = append(cmdArgs, "--api-socket", apiSocket, fmt.Sprintf("%d", ctr.state.PID))
-		cmdArgs = append(cmdArgs, "--api-socket", apiSocket, fmt.Sprintf("%d", process.Pid))
+		cmdArgs = append(cmdArgs, "--api-socket", apiSocket, fmt.Sprintf("%d", ctr.state.PID))
+		//cmdArgs = append(cmdArgs, "--api-socket", apiSocket, fmt.Sprintf("%d", process.Pid))
 	}
 	dhp, mtu, err := checkSlirpFlags(path)
 	if err != nil {
@@ -266,7 +267,8 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 	//	fmt.Println("error getting current user: %s", err)
 	//}
 	//cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("--userns-path=/proc/23984/ns/user", pid), "--netns-type=path", ctr.state.NetNS.Path(), "tap0")
-	cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("%d", process.Pid), "tap0")
+	cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", "--netns-type=path", ctr.state.NetNS.Path(), "tap0")
+	//cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("%d", process.Pid), "tap0")
 
 	//cmd := exec.Command("strace", cmdArgs...)
 	cmd := exec.Command(path, cmdArgs...)
@@ -372,6 +374,7 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 					GuestPort: i.ContainerPort,
 				},
 			}
+			logrus.Warnf("Creating port Mapping cmd: %+v", cmd)
 			// create the JSON payload and send it.  Mark the end of request shutting down writes
 			// to the socket, as requested by slirp4netns.
 			data, err := json.Marshal(&cmd)
@@ -401,9 +404,9 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 		}
 	}
 	logrus.Errorf("PID: %d", os.Getpid())
-	nscmd := exec.Command("ls", "-lht", fmt.Sprintf("/proc/%d/ns/net", process.Pid))
-        output, err := nscmd.CombinedOutput()
-        logrus.Warnf("network namespace: %+v Err: %+v", string(output), err)
+	//nscmd := exec.Command("ls", "-lht", fmt.Sprintf("/proc/%d/ns/net", process.Pid))
+        //output, err := nscmd.CombinedOutput()
+        //logrus.Warnf("network namespace: %+v Err: %+v", string(output), err)
 
 	//nsArgs := []string{"nsenter", fmt.Sprintf("--net=/proc/%d/ns/net", process.Pid), "ip", "a"}
 	//nsCmd := exec.Command("nsenter", nsArgs...)

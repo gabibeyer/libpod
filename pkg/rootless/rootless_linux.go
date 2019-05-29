@@ -207,6 +207,7 @@ func JoinUserAndMountNS(pid uint) (bool, int, error) {
 // If podman was re-executed the caller needs to propagate the error code returned by the child
 // process.
 func BecomeRootInUserNS() (bool, int, error) {
+	logrus.Warnf("In BecomeRootInUserNS")
 	if os.Geteuid() == 0 || os.Getenv("_CONTAINERS_USERNS_CONFIGURED") != "" {
 		if os.Getenv("_CONTAINERS_USERNS_CONFIGURED") == "init" {
 			return false, 0, runInUser()

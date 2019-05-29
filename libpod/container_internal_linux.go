@@ -179,7 +179,7 @@ func (c *Container) generateSpec(ctx context.Context) (*spec.Spec, error) {
 	g := generate.NewFromSpec(c.config.Spec)
 
 	// If network namespace was requested, add it now
-	logrus.Errorf("c.config.PostConfigureNetNS: %s", c.config.PostConfigureNetNS)
+	logrus.Errorf("c.config.CreateNetNS: %v, c.config.PostConfigureNetNS: %v, spec.NetworkNamespace: %+v", c.config.CreateNetNS, c.config.PostConfigureNetNS, spec.NetworkNamespace)
 	if c.config.CreateNetNS {
 		if c.config.PostConfigureNetNS {
 			g.AddOrReplaceLinuxNamespace(spec.NetworkNamespace, "")
@@ -187,14 +187,18 @@ func (c *Container) generateSpec(ctx context.Context) (*spec.Spec, error) {
 			g.AddOrReplaceLinuxNamespace(spec.NetworkNamespace, c.state.NetNS.Path())
 		}
 	}
+	logrus.Errorf("c.config.PostConfigureNetNS: %v", c.config.PostConfigureNetNS)
 
 	// Apply AppArmor checks and load the default profile if needed.
+	logrus.Warnf("Before the break")
 	updatedProfile, err := apparmor.CheckProfileAndLoadDefault(c.config.Spec.Process.ApparmorProfile)
+	logrus.Warnf("ONE")
 	if err != nil {
 		return nil, err
 	}
 	g.SetProcessApparmorProfile(updatedProfile)
 
+	logrus.Warnf("TWP")
 	if err := c.makeBindMounts(); err != nil {
 		return nil, err
 	}

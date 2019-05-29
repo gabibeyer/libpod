@@ -127,7 +127,9 @@ func setupRootless(cmd *cobra.Command, args []string) error {
 	var became bool
 	var ret int
 	if len(ctrs) == 0 {
+		logrus.Warnf("Before become root in main_local")
 		became, ret, err = rootless.BecomeRootInUserNS()
+		logrus.Warnf("After BecomeRootInUserNS. Became: %v, ret: %+v, err: %v", became, ret, err)
 	} else {
 		for _, ctr := range ctrs {
 			data, err := ioutil.ReadFile(ctr.Config().ConmonPidFile)

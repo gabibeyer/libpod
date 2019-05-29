@@ -895,10 +895,12 @@ func makeRuntime(ctx context.Context, runtime *Runtime) (err error) {
 		// we will need to access the storage.
 		if os.Geteuid() != 0 {
 			aliveLock.Unlock()
+			logrus.Warnf("Making call to become root in userNS")
 			became, ret, err := rootless.BecomeRootInUserNS()
 			if err != nil {
 				return err
 			}
+			logrus.Warnf("Finished call to become root in userns: %v %v", became, ret)
 			if became {
 				os.Exit(ret)
 			}
@@ -972,11 +974,12 @@ func makeRuntime(ctx context.Context, runtime *Runtime) (err error) {
 		if os.Geteuid() != 0 {
 			aliveLock.Unlock()
 			locked = false
-
+			logrus.Warnf("Making call to become root in userNS in runtime.doMigrate")
 			became, ret, err := rootless.BecomeRootInUserNS()
 			if err != nil {
 				return err
 			}
+			logrus.Warnf("Finished call to become root in userns: %v %v", became, ret)
 			if became {
 				os.Exit(ret)
 			}
