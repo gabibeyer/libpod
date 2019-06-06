@@ -172,10 +172,68 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 
 	havePortMapping := len(ctr.Config().PortMappings) > 0
 	apiSocket := filepath.Join(r.ociRuntime.tmpDir, fmt.Sprintf("%s.net", ctr.config.ID))
+	logrus.Warnf("apiSocket Path: %s", apiSocket)
+
+	prog_pid := os.Getpid()
+	logrus.Warnf("Current PID: %d", prog_pid)
+
+
+	//pause_bin := "/home/gnbeyer/go/src/github.com/cri-o/cri-o/bin/pause"
+
+	//procAttr := &os.ProcAttr{
+	//	Sys: &syscall.SysProcAttr{
+	//	Cloneflags: syscall.CLONE_NEWNS |
+	//		syscall.CLONE_NEWUSER |
+	//		syscall.CLONE_NEWNET,
+
+	//	UidMappings: []syscall.SysProcIDMap{
+	//	    {
+	//	        ContainerID: 0,
+	//	        HostID:      os.Getuid(),
+	//	        Size:        1,
+	//	    },
+	//	},
+	//	GidMappings: []syscall.SysProcIDMap{
+	//	    {
+	//	        ContainerID: 0,
+	//	        HostID:      os.Getgid(),
+	//	        Size:        1,
+	//	    },
+	//	},
+	//	},
+	//}
+	//fmt.Println("HERE")
+	//process, err := os.StartProcess(pause_bin, []string{}, procAttr)
+	//logrus.Infof("info from os.StartProcess: %+v %+v %d", err, process, process.Pid)
+
+	//defer process.Signal(os.Interrupt)
+
+	if ctr.config.PostConfigureNetNS {
+		ctr.state.NetNS, err = netns.NewNS()
+		if err != nil {
+			logrus.Errorf("Error creating new network namespace %+v", err)
+			return err
+		}
+		logrus.Warnf("Network Namespace Path: %s", ctr.state.NetNS.Path())
+
+		logrus.Warnf("THE GOODS: %+v", ctr.config.Spec.Linux.Namespaces)
+		for i, j := range ctr.config.Spec.Linux.Namespaces {
+			if (j.Type == "network") {
+				ctr.config.Spec.Linux.Namespaces[i].Path = ctr.state.NetNS.Path()
+				//ctr.config.Spec.Linux.Namespaces[i].Path = fmt.Sprintf("/proc/%d/ns/net", process.Pid)
+			}
+		}
+
+		logrus.Warnf("THE GOODS AFTER: %+v", ctr.config.Spec.Linux.Namespaces)
+		if err := ctr.saveSpec(ctr.config.Spec); err != nil {
+			logrus.Errorf("Failure saving spec to disk: %+v", err)
+		}
 
 	cmdArgs := []string{}
 	if havePortMapping {
-		cmdArgs = append(cmdArgs, "--api-socket", apiSocket, fmt.Sprintf("%d", ctr.state.PID))
+		logrus.Warnf("api socket: %s, %d", apiSocket, ctr.state.PID)
+		cmdArgs = append(cmdArgs, "--api-socket", apiSocket)
+	//	//cmdArgs = append(cmdArgs, "--api-socket", apiSocket, fmt.Sprintf("%d", process.Pid))
 	}
 	dhp, mtu, err := checkSlirpFlags(path)
 	if err != nil {
@@ -189,11 +247,27 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 	}
 	cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("%d", ctr.state.PID), "tap0")
 
+	if ctr.config.PostConfigureNetNS {
+		cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", "--netns-type=path", ctr.state.NetNS.Path(), "tap0")
+	} else {
+		cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("%d", ctr.state.PID), "tap0")
+	}
+	//cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("%d", process.Pid), "tap0")
+
+	//cmd := exec.Command("strace", cmdArgs...)
 	cmd := exec.Command(path, cmdArgs...)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}
+
+	if ctr.config.PostConfigureNetNS {
+		ctr.rootlessSlirpSyncR, ctr.rootlessSlirpSyncW, err = os.Pipe()
+		if err != nil {
+		        return errors.Wrapf(err, "failed to create rootless network sync pipe")
+		}
+	}
+
 	cmd.ExtraFiles = append(cmd.ExtraFiles, ctr.rootlessSlirpSyncR, syncW)
 
 	if err := cmd.Start(); err != nil {
@@ -321,7 +395,7 @@ func (r *Runtime) setupNetNS(ctr *Container) (err error) {
 		return errors.Wrapf(err, "failed to generate random netns name")
 	}
 
-	nsPath := fmt.Sprintf("/var/run/netns/cni-%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+	nsPath := fmt.Sprintf("/tmp/katapod/netns/cni-%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 
 	if err := os.MkdirAll(filepath.Dir(nsPath), 0711); err != nil {
 		return errors.Wrapf(err, "cannot create %s", filepath.Dir(nsPath))
@@ -400,20 +474,22 @@ func (r *Runtime) teardownNetNS(ctr *Container) error {
 
 	logrus.Debugf("Tearing down network namespace at %s for container %s", ctr.state.NetNS.Path(), ctr.ID())
 
-	var requestedIP net.IP
-	if ctr.requestedIP != nil {
-		requestedIP = ctr.requestedIP
-		// cancel request for a specific IP in case the container is reused later
-		ctr.requestedIP = nil
-	} else {
-		requestedIP = ctr.config.StaticIP
-	}
+	if !rootless.IsRootless() {
+		var requestedIP net.IP
+		if ctr.requestedIP != nil {
+			requestedIP = ctr.requestedIP
+			// cancel request for a specific IP in case the container is reused later
+			ctr.requestedIP = nil
+		} else {
+			requestedIP = ctr.config.StaticIP
+		}
 
-	podNetwork := r.getPodNetwork(ctr.ID(), ctr.Name(), ctr.state.NetNS.Path(), ctr.config.Networks, ctr.config.PortMappings, requestedIP)
+		podNetwork := r.getPodNetwork(ctr.ID(), ctr.Name(), ctr.state.NetNS.Path(), ctr.config.Networks, ctr.config.PortMappings, requestedIP)
 
-	// The network may have already been torn down, so don't fail here, just log
-	if err := r.netPlugin.TearDownPod(podNetwork); err != nil {
-		return errors.Wrapf(err, "error tearing down CNI namespace configuration for container %s", ctr.ID())
+		// The network may have already been torn down, so don't fail here, just log
+		if err := r.netPlugin.TearDownPod(podNetwork); err != nil {
+			return errors.Wrapf(err, "error tearing down CNI namespace configuration for container %s", ctr.ID())
+		}
 	}
 
 	// First unmount the namespace

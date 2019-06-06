@@ -863,6 +863,12 @@ func (c *Container) init(ctx context.Context, retainRetries bool) error {
 		return err
 	}
 
+	// Setup networking prior to building container
+	if err := c.completeNetworkSetup(); err != nil {
+		logrus.Errorf("Error completing Network Setup: %+v\n", err)
+		return err
+	}
+
 	// With the spec complete, do an OCI create
 	if err := c.runtime.ociRuntime.createContainer(c, c.config.CgroupParent, nil); err != nil {
 		return err
@@ -890,7 +896,7 @@ func (c *Container) init(ctx context.Context, retainRetries bool) error {
 	}
 
 	defer c.newContainerEvent(events.Init)
-	return c.completeNetworkSetup()
+	return nil
 }
 
 // Clean up a container in the OCI runtime.
