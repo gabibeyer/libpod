@@ -314,6 +314,7 @@ func getDefaultTmpDir() (string, error) {
 	}
 
 	rootlessRuntimeDir, err := util.GetRootlessRuntimeDir()
+	logrus.Info("rootlessRuntimeDir: %s", rootlessRuntimeDir)
 	if err != nil {
 		return "", err
 	}
@@ -368,6 +369,7 @@ func NewRuntimeFromConfig(ctx context.Context, userConfigPath string, options ..
 }
 
 func newRuntimeFromConfig(ctx context.Context, userConfigPath string, options ...RuntimeOption) (runtime *Runtime, err error) {
+	logrus.Info("newRuntimeFromConfig function in runtime.go")
 	runtime = new(Runtime)
 	runtime.config = new(RuntimeConfig)
 	runtime.configuredFrom = new(runtimeConfiguredFrom)
@@ -570,6 +572,7 @@ func newRuntimeFromConfig(ctx context.Context, userConfigPath string, options ..
 // Make a new runtime based on the given configuration
 // Sets up containers/storage, state store, OCI runtime
 func makeRuntime(ctx context.Context, runtime *Runtime) (err error) {
+	logrus.Info("makeRuntime function within runtime.go")
 	// Backward compatibility for `runtime_path`
 	if runtime.config.RuntimePath != nil {
 		// Don't print twice in rootless mode.
@@ -899,6 +902,7 @@ func makeRuntime(ctx context.Context, runtime *Runtime) (err error) {
 			if err != nil {
 				return err
 			}
+			logrus.Warnf("Finished call to become root in userns: %v %v", became, ret)
 			if became {
 				os.Exit(ret)
 			}

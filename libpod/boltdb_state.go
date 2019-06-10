@@ -461,6 +461,7 @@ func (s *BoltState) LookupContainer(idOrName string) (*Container, error) {
 		return nil, err
 	}
 
+	logrus.Warnf("State: %+v", ctr.state)
 	return ctr, nil
 }
 

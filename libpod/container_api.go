@@ -240,6 +240,7 @@ func (c *Container) Exec(tty, privileged bool, env, cmd []string, user, workDir 
 	}
 
 	conState := c.state.State
+	logrus.Warnf("conState: %+v", conState)
 
 	// TODO can probably relax this once we track exec sessions
 	if conState != ContainerStateRunning {

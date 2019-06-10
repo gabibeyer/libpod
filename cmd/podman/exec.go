@@ -11,6 +11,7 @@ import (
 	"github.com/containers/libpod/cmd/podman/shared/parse"
 	"github.com/containers/libpod/libpod"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -54,6 +55,7 @@ func init() {
 }
 
 func execCmd(c *cliconfig.ExecValues) error {
+	logrus.Warnf("exec c: %+v", c)
 	args := c.InputArgs
 	var ctr *libpod.Container
 	var err error
@@ -83,6 +85,7 @@ func execCmd(c *cliconfig.ExecValues) error {
 		return errors.Wrapf(err, "unable to exec into %s", args[0])
 	}
 
+	logrus.Warnf("preserveFDS: %d", c.PreserveFDs)
 	if c.PreserveFDs > 0 {
 		entries, err := ioutil.ReadDir("/proc/self/fd")
 		if err != nil {
@@ -114,6 +117,7 @@ func execCmd(c *cliconfig.ExecValues) error {
 	}
 	envs := []string{}
 	for k, v := range env {
+		logrus.Warnf("Envs: %+v", k, v)
 		envs = append(envs, fmt.Sprintf("%s=%s", k, v))
 	}
 
@@ -125,5 +129,6 @@ func execCmd(c *cliconfig.ExecValues) error {
 	streams.AttachError = true
 	streams.AttachInput = true
 
+	logrus.Warnf("CONTAINER: %+v | Network state: %+v", ctr, ctr.State)
 	return ctr.Exec(c.Tty, c.Privileged, envs, cmd, c.User, c.Workdir, streams, c.PreserveFDs)
 }

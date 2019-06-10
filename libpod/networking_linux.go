@@ -229,6 +229,9 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 			logrus.Errorf("Failure saving spec to disk: %+v", err)
 		}
 
+	}
+	//cmdArgs := []string{"-f", "-o", "/tmp/output/podman", "slirp4netns"}
+	logrus.Warnf("Container state: %+v", ctr.state)
 	cmdArgs := []string{}
 	if havePortMapping {
 		logrus.Warnf("api socket: %s, %d", apiSocket, ctr.state.PID)
@@ -245,7 +248,6 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 	if mtu {
 		cmdArgs = append(cmdArgs, "--mtu", "65520")
 	}
-	cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", fmt.Sprintf("%d", ctr.state.PID), "tap0")
 
 	if ctr.config.PostConfigureNetNS {
 		cmdArgs = append(cmdArgs, "-c", "-e", "3", "-r", "4", "--netns-type=path", ctr.state.NetNS.Path(), "tap0")
@@ -256,6 +258,8 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 
 	//cmd := exec.Command("strace", cmdArgs...)
 	cmd := exec.Command(path, cmdArgs...)
+	//cmd.Env = os.Environ()
+	//logrus.Warnf("Slirp command: %s", cmd)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
@@ -269,10 +273,12 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 	}
 
 	cmd.ExtraFiles = append(cmd.ExtraFiles, ctr.rootlessSlirpSyncR, syncW)
+	logrus.Warnf("ctr.rootlessSlirpSyncR: %d, syncW: %d", ctr.rootlessSlirpSyncR.Fd(), syncW.Fd())
 
 	if err := cmd.Start(); err != nil {
 		return errors.Wrapf(err, "failed to start slirp4netns process")
 	}
+	logrus.Warnf("slirp4netns process cmd pid: %d", cmd.Process.Pid)
 	defer cmd.Process.Release()
 
 	b := make([]byte, 16)
@@ -304,6 +310,7 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 			return errors.Wrapf(err, "failed to read from slirp4netns sync pipe")
 		}
 	}
+	logrus.Infof("have portmappings: %v", havePortMapping)
 
 	if havePortMapping {
 		const pidWaitTimeout = 60 * time.Second

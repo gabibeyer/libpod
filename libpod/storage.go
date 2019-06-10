@@ -301,7 +301,9 @@ func (r *storageService) GetWorkDir(id string) (string, error) {
 }
 
 func (r *storageService) GetRunDir(id string) (string, error) {
+	logrus.Warnf("Inside storageService.GetRundir")
 	container, err := r.store.Container(id)
+	logrus.Warnf("GetRunDir storage service: ID: %s, Container: %+v, err: %+v", id, container, err)
 	if err != nil {
 		if errors.Cause(err) == storage.ErrContainerUnknown {
 			return "", ErrNoSuchCtr
