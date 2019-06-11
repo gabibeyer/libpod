@@ -854,6 +854,10 @@ func makeRuntime(ctx context.Context, runtime *Runtime) (err error) {
 		}
 		runtime.netPlugin = netPlugin
 	}
+	//	became, ret, err := rootless.BecomeRootInUserNS(pausePid)
+	//	if err != nil || !became {
+	//		return err
+	//	}
 
 	// Set up a firewall backend
 	backendType := ""

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/containers/buildah"
 	"github.com/containers/libpod/cmd/podman/shared"
 	"github.com/containers/libpod/cmd/podman/varlink"
@@ -26,6 +27,7 @@ func makeListContainer(containerID string, batchInfo shared.BatchContainerStruct
 		ports  []iopodman.ContainerPortMappings
 	)
 	ns := shared.GetNamespaces(batchInfo.Pid)
+	logrus.Errorf("NAMESPACE: %+v", ns)
 
 	for _, mount := range batchInfo.ConConfig.Spec.Mounts {
 		m := iopodman.ContainerMount{

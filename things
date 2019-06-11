@@ -1,0 +1,5 @@
+0. Mail mailing list about sandboxID and containerID things
+
+1. Modify to use slirp4netns without the process (get bind/mount path from created container of runc) and pass to slirp4netns
+
+2. Make the changes that move things around and modify the ordering of 1. create network namespace then 2. create container.

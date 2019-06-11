@@ -19,8 +19,8 @@ import (
 	"github.com/containers/libpod/pkg/util"
 	"github.com/containers/libpod/utils"
 	pmount "github.com/containers/storage/pkg/mount"
-	"github.com/coreos/go-systemd/activation"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/coreos/go-systemd/activation"
 	"github.com/opencontainers/selinux/go-selinux"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
@@ -188,6 +188,9 @@ func (r *OCIRuntime) conmonPackage() string {
 }
 
 func (r *OCIRuntime) createOCIContainer(ctr *Container, cgroupParent string, restoreOptions *ContainerCheckpointOptions) (err error) {
+	defer ctr.rootlessSlirpSyncR.Close()
+        defer ctr.rootlessSlirpSyncW.Close()
+
 	var stderrBuf bytes.Buffer
 
 	runtimeDir, err := util.GetRootlessRuntimeDir()
@@ -302,14 +305,14 @@ func (r *OCIRuntime) createOCIContainer(ctr *Container, cgroupParent string, res
 		cmd.ExtraFiles = append(cmd.ExtraFiles, ports...)
 	}
 
-// if ctr.config.NetMode.IsSlirp4netns() {
-//               ctr.rootlessSlirpSyncR, ctr.rootlessSlirpSyncW, err = os.Pipe()
-//               if err != nil {
-//                       return errors.Wrapf(err, "failed to create rootless network sync pipe")
-//               }
-//               // Leak one end in conmon, the other one will be leaked into slirp4netns
-//               cmd.ExtraFiles = append(cmd.ExtraFiles, ctr.rootlessSlirpSyncW)
-//       }
+	if ctr.config.NetMode.IsSlirp4netns() {
+               //ctr.rootlessSlirpSyncR, ctr.rootlessSlirpSyncW, err = os.Pipe()
+               //if err != nil {
+               //        return errors.Wrapf(err, "failed to create rootless network sync pipe")
+               //}
+               // Leak one end in conmon, the other one will be leaked into slirp4netns
+               cmd.ExtraFiles = append(cmd.ExtraFiles, ctr.rootlessSlirpSyncW)
+        }
 
 	if notify, ok := os.LookupEnv("NOTIFY_SOCKET"); ok {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("NOTIFY_SOCKET=%s", notify))

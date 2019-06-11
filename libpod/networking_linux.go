@@ -149,8 +149,8 @@ func checkSlirpFlags(path string) (bool, bool, error) {
 
 // Configure the network namespace for a rootless container
 func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
-	defer ctr.rootlessSlirpSyncR.Close()
-	defer ctr.rootlessSlirpSyncW.Close()
+//	defer ctr.rootlessSlirpSyncR.Close()
+//	defer ctr.rootlessSlirpSyncW.Close()
 
 	path := r.config.NetworkCmdPath
 
@@ -258,7 +258,7 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 
 	//cmd := exec.Command("strace", cmdArgs...)
 	cmd := exec.Command(path, cmdArgs...)
-	//cmd.Env = os.Environ()
+	cmd.Env = os.Environ()
 	//logrus.Warnf("Slirp command: %s", cmd)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -270,10 +270,16 @@ func (r *Runtime) setupRootlessNetNS(ctr *Container) (err error) {
 		if err != nil {
 		        return errors.Wrapf(err, "failed to create rootless network sync pipe")
 		}
+		cmd.ExtraFiles = append(cmd.ExtraFiles, ctr.rootlessSlirpSyncR, syncW)
 	}
-
-	cmd.ExtraFiles = append(cmd.ExtraFiles, ctr.rootlessSlirpSyncR, syncW)
-	logrus.Warnf("ctr.rootlessSlirpSyncR: %d, syncW: %d", ctr.rootlessSlirpSyncR.Fd(), syncW.Fd())
+	//if notify, ok := os.LookupEnv("NOTIFY_SOCKET"); ok {
+        //        cmd.Env = append(cmd.Env, fmt.Sprintf("NOTIFY_SOCKET=%s", notify))
+        //}
+        //if listenfds, ok := os.LookupEnv("LISTEN_FDS"); ok {
+        //        cmd.Env = append(cmd.Env, fmt.Sprintf("LISTEN_FDS=%s", listenfds), "LISTEN_PID=1")
+        //        fds := activation.Files(false)
+        //        cmd.ExtraFiles = append(cmd.ExtraFiles, fds...)
+        //}
 
 	if err := cmd.Start(); err != nil {
 		return errors.Wrapf(err, "failed to start slirp4netns process")

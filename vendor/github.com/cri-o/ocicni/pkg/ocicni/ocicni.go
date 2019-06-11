@@ -247,6 +247,7 @@ func (plugin *cniNetworkPlugin) Shutdown() error {
 }
 
 func loadNetworks(exec cniinvoke.Exec, confDir string, binDirs []string) (map[string]*cniNetwork, string, error) {
+	logrus.Warnf("Inside loadNetworks")
 	files, err := libcni.ConfFiles(confDir, []string{".conf", ".conflist", ".json"})
 	if err != nil {
 		return nil, "", err
@@ -328,6 +329,7 @@ func getLoNetwork(exec cniinvoke.Exec, binDirs []string) *cniNetwork {
 }
 
 func (plugin *cniNetworkPlugin) syncNetworkConfig() error {
+	logrus.Warnf("Inside syncNetwork")
 	networks, defaultNetName, err := loadNetworks(plugin.exec, plugin.confDir, plugin.binDirs)
 	if err != nil {
 		return err
